@@ -1,59 +1,86 @@
 import json
 import boto3
 from datetime import date
-
 dynamodb = boto3.resource('dynamodb')
 table = dynamodb.Table('StudentInfomationDB')
 
+################################### Methods ########################################
+########### Methhod (1)to Check is the given regno is already exist or not  ###############
+def check_if_item_exist(item):
+    response = table.get_item(
+        Key={
+            'regno': item
+        }
+    )
+    return True if ('Item' in response) else False
+    
+    
+############################################## Method to check the validation of input ################
+def validatesInput(firstname,lastname,section,errors,resp):
+    
+    if (firstname==None or not firstname):
+        resp["success"]=False
+        resp["StatusCode"]=400
+        resp["message"]='Requested Inputs are not completes'                
+        errors.append("errormessage : firstname not valid/Firstname is empty")
+
+        
+    if (lastname==None or not lastname):
+        resp["success"]=False
+        resp["StatusCode"]=400
+        resp["message"]='Requested Inputs are not completes' 
+        errors.append("errormessage :lastname not valid/lastname is empty")
+        
+    if (section!=None and not section):
+        resp["success"]=False
+        resp["StatusCode"]=400
+        resp["message"]='Requested Inputs are not completes' 
+        errors.append("errormessage : sectoin not valid/sectoin is empty")
+    return True if (not errors ) else False    
+
+################################################ main lambda function ##########################################
 def lambda_handler(event, context):
-    now = str(date.today())
-    print("date and time2 is ",now)
+    errors=[]
+    resp={
+    "success":False ,
+    "StatusCode":400 ,
+    "message":""
+    }
     regno = event.get('regno', None)
     firstname = event.get('firstname', None)
     lastname = event.get('lastname', None)
     section = event.get('section', None)
     
-    if firstname==None or not firstname or  regno==None or not regno or lastname==None or not lastname or section!=None and not section :
-        return {
-                    'statusCode': 404,
-                    'body': ('Input Events  Not Found')
-        }
+    if  (regno==None or not regno) :
+        resp["success"]=False
+        resp["StatusCode"]=400
+        resp["message"]=' Registration Number is Primary Key must be Entered First'
+        errors.append( 'errormessage : Invalid registration number ')
+        errors.append( 'errormessage : Registration Number is not Entered ')
 
     else:
-        
-        def check_if_item_exist(item):
-            response = table.get_item(
-                Key={
-                    'regno': item
-                }
-            )
-            if 'Item' in response:
-               
-                return True
 
-            else:
-                return False
-        
-        
         if(check_if_item_exist(str(regno.upper())) ):
-            return {
-                'statusCode': 403,
-                'body': ('Data is already uploaded for ' + regno+" already")
-            }
+            resp["success"]=False
+            resp["StatusCode"]=400
+            resp["message"]='Duplication of data may occur try with another registration number '
+            errors.append('errormessage : Data is already uploaded for ' + regno)
+            
 
     
-        else:    
-      # write name and time to the DynamoDB table using the object we instantiated and save response in a variable
-            response = table.put_item(
-                Item={
-                    'regno': str(regno).upper(),
-                    'firstname':firstname,
-                    'lastname':lastname,
-                    'section':section,
-                    'LatestGreetingTime':now
-                    })
-        # return a properly formatted JSON object
-            return {
-                'statusCode': 200,
-                'body': ('Data uploaded Successfully for  ' + regno)
-            }
+        else:
+            if(validatesInput(firstname,lastname,section,errors,resp)):
+                response = table.put_item(Item=event)
+                resp["success"]=True
+                resp["StatusCode"]=200
+                resp["message"]='Date stored Successfully ' 
+
+                
+    # if not errors:
+    #     return resp
+    # else:    
+    resp.setdefault("errors", []).append(errors)            
+    return resp
+
+
+
